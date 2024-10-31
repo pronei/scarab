@@ -36,6 +36,7 @@
 
 #include "bp/bp.h"
 #include "dcache_stage.h"
+#include "3c_stat.h"
 #include "map.h"
 #include "model.h"
 
@@ -92,6 +93,9 @@ void init_dcache_stage(uns8 proc_id, const char* name) {
   /* initialize the cache structure */
   init_cache(&dc->dcache, "DCACHE", DCACHE_SIZE, DCACHE_ASSOC, DCACHE_LINE_SIZE,
              sizeof(Dcache_Data), DCACHE_REPL);
+  
+  init_cache(&dc->stat_cache, "STAT_CACHE", DCACHE_SIZE, DCACHE_SIZE/DCACHE_LINE_SIZE, DCACHE_LINE_SIZE,
+            sizeof(Dcache_Data), DCACHE_REPL);
 
   reset_dcache_stage();
 
@@ -426,6 +430,20 @@ void update_dcache_stage(Stage_Data* src_sd) {
           }
 
           if(!op->off_path) {
+            MissType m_type = classify_miss(op->oracle_info.va, &dc->dcache, &dc->stat_cache);
+            switch (m_type) {
+              case COMPULSORY_MISS:
+                STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH_COMPULSORY);
+                break;
+              case CAPACITY_MISS:
+                STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH_CAPACITY);
+                break;
+              case CONFLICT_MISS:
+                STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH_CONFLICT);
+                break;
+              case HIT:
+                break;
+            }
             STAT_EVENT(op->proc_id, DCACHE_MISS);
             STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH);
             STAT_EVENT(op->proc_id, DCACHE_MISS_LD_ONPATH);
@@ -539,6 +557,20 @@ void update_dcache_stage(Stage_Data* src_sd) {
           }
 
           if(!op->off_path) {
+            MissType m_type = classify_miss(op->oracle_info.va, &dc->dcache, &dc->stat_cache);
+            switch (m_type) {
+              case COMPULSORY_MISS:
+                STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH_COMPULSORY);
+                break;
+              case CAPACITY_MISS:
+                STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH_CAPACITY);
+                break;
+              case CONFLICT_MISS:
+                STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH_CONFLICT);
+                break;
+              case HIT:
+                break;
+            }
             STAT_EVENT(op->proc_id, DCACHE_MISS);
             STAT_EVENT(op->proc_id, DCACHE_MISS_ONPATH);
             STAT_EVENT(op->proc_id, DCACHE_MISS_ST_ONPATH);
@@ -677,6 +709,10 @@ Flag dcache_fill_line(Mem_Req* req) {
 
     data = (Dcache_Data*)cache_insert(&dc->dcache, dc->proc_id, req->addr,
                                       &line_addr, &repl_line_addr);
+
+    Addr line_addr_stat, repl_line_addr_stat;
+    cache_insert(&dc->stat_cache, dc->proc_id, req->addr, &line_addr_stat, &repl_line_addr_stat);
+    
     DEBUG(dc->proc_id,
           "Filling dcache  off_path:%d addr:0x%s  :%7d index:%7d op_count:%d "
           "oldest:%lld\n",
