@@ -39,7 +39,7 @@ Bp bp_table [] = {
 #include "cbp_table.def"
 #undef DEF_CBP
     { NUM_BP,       0,          NULL,               NULL,                   NULL,             NULL,                     NULL,                NULL,                NULL,                 NULL }
-    
+    { BIMODAL_BP,       "bimodal",  bp_bimodal_init,    NULL,                   bp_bimodal_pred,  NULL,                     bp_bimodal_update,   NULL,                NULL,                 NULL }
 };
 
 
