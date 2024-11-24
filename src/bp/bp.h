@@ -183,6 +183,7 @@ typedef enum Bp_Id_enum {
 #undef DEF_CBP
   NUM_BP,
   BIMODAL_BP,
+  PERCEPTRON_BP,
 } Bp_Id;
 
 typedef enum Btb_Id_enum {
