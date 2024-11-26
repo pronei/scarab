@@ -1,6 +1,11 @@
+#include "globals/global_defs.h"
+#include "globals/global_types.h"
+#include "globals/utils.h"
+
 #include "bp/bp.h"
 #include "bp/bp_perceptron.h"
-#include "globals/global_defs.h"
+
+#include "statistics.h"
 
 // 16 by 1024 grid of perceptrons
 // indexed first by 4 global history bits followed by branch PC
