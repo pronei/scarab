@@ -10,12 +10,14 @@
 #define WEAKLY_NOT_TAKEN 1
 #define STRONGLY_NOT_TAKEN 0
 
+#define BIMODAL_TABLE_SIZE (1 << 24)
+
 static Hash_Table bp_bimodal_hist_table;
 
 void bp_bimodal_init(void) {
-    init_hash_table(&bp_bimodal_hist_table, "Bimodal Predictor History", 15000000, sizeof(unsigned char));
+    init_hash_table(&bp_bimodal_hist_table, "Bimodal Predictor History", BIMODAL_TABLE_SIZE, sizeof(unsigned char));
 
-    for (uns i = 0; i < 15000000; i++) {
+    for (uns i = 0; i < BIMODAL_TABLE_SIZE; i++) {
         Flag new_entry;
         unsigned char* state = hash_table_access_create(&bp_bimodal_hist_table, i, &new_entry);
         ASSERT(0, state);
@@ -32,12 +34,10 @@ uns8 bp_bimodal_pred(Op* op) {
     if (!state) {return TAKEN;}
 
     if (*state >= WEAKLY_TAKEN) {
-        op->oracle_info.pred = TAKEN;
+        return TAKEN;
     } else {
-        op->oracle_info.pred = NOT_TAKEN;
+        return NOT_TAKEN;
     }
-
-    return op->oracle_info.pred;
 }
 
 void bp_bimodal_update(Op* op) {

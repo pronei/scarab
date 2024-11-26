@@ -181,6 +181,7 @@ struct Op_struct {
 
   int32 perceptron_output;       //
   int32 conf_perceptron_output;  // confidece perceptron
+  int32 perceptron_dot_output;   // the computed dot product of the perceptron
   // {{{ state and event cycle counters
   Op_State state;        // the state of the op in the datapath
   Counter  fetch_cycle;  // cycle an individual instruction is fetched
