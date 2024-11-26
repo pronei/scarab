@@ -96,6 +96,12 @@ uns8 perceptron_predict(Op* op) {
 #define MIN_WEIGHT (-(MAX_WEIGHT + 1))
 
 void perceptron_update(Op* op) {
+    // TODO: check if we need to update GHR ourselves or whether bp.c does it for us...
+
+    if (op->table_info->cf_type != CF_CBR) {
+        return;
+    }
+
     int32 output      = 0;
     // TODO: if num_cores > 1, then change to custom
     Addr  branch_addr  = convert_to_cmp_addr(op->proc_id, op->inst_info->addr);
