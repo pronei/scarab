@@ -34,9 +34,9 @@ static Bp_Perceptron_Data** bp_percep_data_all_cores = NULL;
 
 void perceptron_bp_init(void) {
     bp_percep_data_all_cores = (Bp_Perceptron_Data**) malloc(sizeof(Bp_Perceptron_Data*) * NUM_CORES);
-    for (uns i = 0; i < NUM_CORES; i++) {
-        bp_percep_data_all_cores[i] = (Bp_Perceptron_Data*) malloc(sizeof(Bp_Perceptron_Data));
-        Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[i];
+    for (uns c = 0; c < NUM_CORES; c++) {
+        bp_percep_data_all_cores[c] = (Bp_Perceptron_Data*) malloc(sizeof(Bp_Perceptron_Data));
+        Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[c];
         bp_percep_data->grid = (Perceptron**)malloc(sizeof(Perceptron*) * GRID_DIM_1);
 
         for(uns i = 0; i < GRID_DIM_1; i++) {
@@ -45,7 +45,7 @@ void perceptron_bp_init(void) {
           for(uns j = 0; j < GRID_DIM_2; j++) {
             // number of weights defined plus bias
             bp_percep_data->grid[i][j].weights = (int32*)malloc(
-              sizeof(int32) * PERCEP_HIST_LEN + 1);
+              sizeof(int32) * (PERCEP_HIST_LEN + 1));
 
             for(uns k = 0; k < PERCEP_HIST_LEN + 1; k++) {
               bp_percep_data->grid[i][j].weights[k] = PERCEP_WEIGHT_INIT_VAL;
