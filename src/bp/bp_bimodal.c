@@ -13,6 +13,12 @@
 
 static Hash_Table* bp_bimodal_hist_table_all_cores = NULL;
 
+void bp_bimodal_timestamp(Op* op) {}
+void bp_bimodal_spec_update(Op* op) {}
+void bp_bimodal_retire(Op* op) {}
+void bp_bimodal_recover(Recovery_Info* info) {}
+uns8 bp_bimodal_full(uns proc_id) { return 0; }
+
 void bp_bimodal_init(void) {
     bp_bimodal_hist_table_all_cores = (Hash_Table*) malloc(sizeof(Hash_Table) * NUM_CORES);
     for (uns i = 0; i < NUM_CORES; i++) {
