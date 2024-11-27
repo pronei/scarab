@@ -1,3 +1,4 @@
+#include "debug/debug_macros.h"
 #include "globals/global_defs.h"
 #include "globals/global_types.h"
 #include "globals/utils.h"
@@ -18,7 +19,7 @@
 
 #define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_BP, ##args)
 
-static Bp_Perceptron_Data* bp_percep_data = NULL;
+static Bp_Perceptron_Data** bp_percep_data_all_cores = NULL;
 
 #define CMP_ADDR_MASK_CUS (((Addr)-1) << 10)
 // used to add 3 bits of proc_id to the 10 bit addr
@@ -31,29 +32,34 @@ Addr convert_to_cmp_addr_13bit(uns8 proc_id, Addr addr) {
 }
 
 void perceptron_bp_init(void) {
-    bp_percep_data = (Bp_Perceptron_Data *) malloc(sizeof(Bp_Perceptron_Data));
-    bp_percep_data->grid = (Perceptron**) malloc(sizeof(Perceptron*) * GRID_DIM_1);
+    bp_percep_data_all_cores = (Bp_Perceptron_Data**) malloc(sizeof(Bp_Perceptron_Data*) * NUM_CORES);
+    for (uns i = 0; i < NUM_CORES; i++) {
+        bp_percep_data_all_cores[i] = (Bp_Perceptron_Data*) malloc(sizeof(Bp_Perceptron_Data));
+        Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[i];
+        bp_percep_data->grid = (Perceptron**)malloc(sizeof(Perceptron*) * GRID_DIM_1);
 
-    for (uns i = 0; i < GRID_DIM_1; i++) {
-        bp_percep_data->grid[i] = (Perceptron*) malloc(sizeof(Perceptron) * GRID_DIM_2);
-        
-        for (uns j = 0; j < GRID_DIM_2; j++) {
+        for(uns i = 0; i < GRID_DIM_1; i++) {
+          bp_percep_data->grid[i] = (Perceptron*)malloc(sizeof(Perceptron) * GRID_DIM_2);
+
+          for(uns j = 0; j < GRID_DIM_2; j++) {
             // number of weights defined plus bias
-            bp_percep_data->grid[i][j].weights = (int32*) malloc(sizeof(int32) * PERCEP_HIST_LEN+1);
-            
-            for (uns k = 0; k < PERCEP_HIST_LEN+1; k++) {
-                bp_percep_data->grid[i][j].weights[k] = PERCEP_WEIGHT_INIT_VAL;
+            bp_percep_data->grid[i][j].weights = (int32*)malloc(
+              sizeof(int32) * PERCEP_HIST_LEN + 1);
+
+            for(uns k = 0; k < PERCEP_HIST_LEN + 1; k++) {
+              bp_percep_data->grid[i][j].weights[k] = PERCEP_WEIGHT_INIT_VAL;
             }
+          }
         }
     }
 }
 
+#define PROC_IDX(proc_id) (proc_id % NUM_CORES)
 #define PERCEPTRON_DIM_IDX(addr, dim_entries) ((addr) & N_BIT_MASK(LOG2(dim_entries)))
 
 uns8 perceptron_predict(Op* op) {
     uns8  output;
     int32 dot_product = 0;
-    // TODO: if num_cores > 1, then change to custom
     Addr  branch_addr = convert_to_cmp_addr(op->proc_id, op->inst_info->addr);
     uns32 index1      = PERCEPTRON_DIM_IDX(op->oracle_info.pred_global_hist, GRID_DIM_1);
     uns32 index2      = PERCEPTRON_DIM_IDX(branch_addr, GRID_DIM_2);
@@ -61,6 +67,7 @@ uns8 perceptron_predict(Op* op) {
     uns32 mask;
     uns   ii;
     
+    Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[PROC_IDX(op->proc_id)];
     Perceptron* p = &(bp_percep_data->grid[index1][index2]);
     int32* w = &(p->weights[0]);
 
@@ -91,7 +98,7 @@ uns8 perceptron_predict(Op* op) {
 }
 
 #define PERCEPTRON_THRESH (int32) (1.93 * (PERCEP_HIST_LEN) + 14)
-// used from bp_conf.c
+// used from bp_conf.c, 127 & -128
 #define MAX_WEIGHT ((1 << (8 - 1)) - 1)
 #define MIN_WEIGHT (-(MAX_WEIGHT + 1))
 
@@ -103,26 +110,26 @@ void perceptron_update(Op* op) {
     }
 
     int32 output      = 0;
-    // TODO: if num_cores > 1, then change to custom
     Addr  branch_addr  = convert_to_cmp_addr(op->proc_id, op->inst_info->addr);
     uns32 index1       = PERCEPTRON_DIM_IDX(op->oracle_info.pred_global_hist, GRID_DIM_1);
     uns32 index2       = PERCEPTRON_DIM_IDX(branch_addr, GRID_DIM_2);
     uns32 hist         = op->oracle_info.pred_global_hist;
     int32 dot_product  = op->perceptron_dot_output;
     int8  correct_pred = op->oracle_info.mispred ? -1 : 1;
-    uns8  do_train     = true;
+    uns8  do_train     = 1;
     uns32 mask;
     uns   ii;
 
+    Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[PROC_IDX(op->proc_id)];
     Perceptron* p = &(bp_percep_data->grid[index1][index2]);
     int32* w = &(p->weights[0]);
 
     // don't train if the branch was correctly predicted and the output
     // falls outside [-theta, theta]
     if (dot_product > PERCEPTRON_THRESH && correct_pred == 1) {
-        do_train = false;
+        do_train = 0;
     } else if (dot_product < -PERCEPTRON_THRESH && correct_pred == 1) {
-        do_train = false;
+        do_train = 0;
     }
 
     if (do_train) {
