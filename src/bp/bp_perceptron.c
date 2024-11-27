@@ -32,6 +32,12 @@ static Bp_Perceptron_Data** bp_percep_data_all_cores = NULL;
 //   return (addr | (((Addr)proc_id) << 10)) & N_BIT_MASK(13);
 // }
 
+void perceptron_timestamp(Op* op) {}
+void perceptron_spec_update(Op* op) {}
+void perceptron_retire(Op* op) {}
+void perceptron_recover(Recovery_Info* info) {}
+uns8 perceptron_full(uns proc_id) { return 0; }
+
 void perceptron_bp_init(void) {
     bp_percep_data_all_cores = (Bp_Perceptron_Data**) malloc(sizeof(Bp_Perceptron_Data*) * NUM_CORES);
     for (uns c = 0; c < NUM_CORES; c++) {
