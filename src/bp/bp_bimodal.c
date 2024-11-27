@@ -1,16 +1,10 @@
 #include "bp/bp.h"
+#include "bp/bp_bimodal.h"
 #include "libs/hash_lib.h"
 #include "globals/utils.h"
 #include "globals/assert.h"
 #include <stdlib.h>
 #include <string.h>
-
-#define STRONGLY_TAKEN 3
-#define WEAKLY_TAKEN 2
-#define WEAKLY_NOT_TAKEN 1
-#define STRONGLY_NOT_TAKEN 0
-
-#define BIMODAL_TABLE_SIZE (1 << 24)
 
 static Hash_Table bp_bimodal_hist_table;
 

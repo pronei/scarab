@@ -22,14 +22,15 @@
 static Bp_Perceptron_Data** bp_percep_data_all_cores = NULL;
 
 #define CMP_ADDR_MASK_CUS (((Addr)-1) << 10)
+
 // used to add 3 bits of proc_id to the 10 bit addr
 // TODO: needs GRID_DIM_2 to be 2^13
-Addr convert_to_cmp_addr_13bit(uns8 proc_id, Addr addr) {
-  if((addr & CMP_ADDR_MASK_CUS)) {
-    addr = addr & ~CMP_ADDR_MASK_CUS;
-  }
-  return (addr | (((Addr)proc_id) << 10)) & N_BIT_MASK(13);
-}
+// Addr convert_to_cmp_addr_13bit(uns8 proc_id, Addr addr) {
+//   if((addr & CMP_ADDR_MASK_CUS)) {
+//     addr = addr & ~CMP_ADDR_MASK_CUS;
+//   }
+//   return (addr | (((Addr)proc_id) << 10)) & N_BIT_MASK(13);
+// }
 
 void perceptron_bp_init(void) {
     bp_percep_data_all_cores = (Bp_Perceptron_Data**) malloc(sizeof(Bp_Perceptron_Data*) * NUM_CORES);
@@ -109,7 +110,6 @@ void perceptron_update(Op* op) {
         return;
     }
 
-    int32 output      = 0;
     Addr  branch_addr  = convert_to_cmp_addr(op->proc_id, op->inst_info->addr);
     uns32 index1       = PERCEPTRON_DIM_IDX(op->oracle_info.pred_global_hist, GRID_DIM_1);
     uns32 index2       = PERCEPTRON_DIM_IDX(branch_addr, GRID_DIM_2);
@@ -148,6 +148,7 @@ void perceptron_update(Op* op) {
             ii++, mask >>= 1, w++) {
             
             int32 old_w = *w;
+            UNUSED(old_w);
 
             if (!!(hist & mask) == op->oracle_info.dir) {
                 (*w)++;
