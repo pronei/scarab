@@ -160,6 +160,9 @@ void perceptron_update(Op* op) {
         return;
     }
 
+    Addr  branch_addr = convert_to_cmp_addr(op->proc_id, op->inst_info->addr);
+    uns32 index1      = PERCEPTRON_DIM_IDX(op->oracle_info.pred_global_hist, GRID_DIM_1);
+    uns32 index2      = PERCEPTRON_DIM_IDX(branch_addr, GRID_DIM_2);
     uns32 hist         = op->oracle_info.pred_global_hist;
     int32 dot_product  = op->perceptron_dot_output;
     int8  correct_pred = op->oracle_info.mispred ? -1 : 1;
