@@ -2,10 +2,12 @@
 #define __BP_PERCEP_H__
 
 #include "bp/bp.h"
+#include "libs/hash_lib.h"
 #include "globals/global_types.h"
 
 typedef struct Bp_Perceptron_Data_struct {
     Perceptron** grid;
+    Hash_Table table;
     uns64 perceptron_global_hist;
 } Bp_Perceptron_Data;
 
