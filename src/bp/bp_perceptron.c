@@ -5,6 +5,7 @@
 
 #include "libs/hash_lib.h"
 #include "bp/bp.h"
+#include "bp/bp.param.h"
 #include "bp/bp_perceptron.h"
 
 #include "statistics.h"
@@ -75,6 +76,7 @@ Perceptron* get_perceptron(Op* op, Bp_Perceptron_Data* bp_percep_data) {
     // change the impl based on USE_ALT_IDX
     if (USE_ALT_IDX) {
         Flag new_entry;
+        // TODO: try without truncate macro
         p = (Perceptron*) hash_table_access_create(
             &bp_percep_data->table, TRUNCATE_TO_INT64(branch_addr), &new_entry);
         if (new_entry) {
@@ -163,10 +165,12 @@ void perceptron_update(Op* op) {
             (*w)++;
         else
             (*w)--;
-        if (*w > MAX_WEIGHT_PERCEP)
+        if (CAP_PERCEP_WEIGHTS) {
+          if(*w > MAX_WEIGHT_PERCEP)
             *w = MAX_WEIGHT_PERCEP;
-        else if (*w < MIN_WEIGHT_PERCEP)
+          else if(*w < MIN_WEIGHT_PERCEP)
             *w = MIN_WEIGHT_PERCEP;
+        }
 
         // increment w_i if x_i positively correlates with the true direction
         for (uns i = 0; i < PERCEP_HIST_LEN; i++, w++) {
@@ -175,12 +179,16 @@ void perceptron_update(Op* op) {
             uns8 match = (hist & (1ULL << i)) > 0;
             if (match == op->oracle_info.dir) {
                 (*w)++;
-                if (*w > MAX_WEIGHT_PERCEP)
+                if (CAP_PERCEP_WEIGHTS) {
+                  if(*w > MAX_WEIGHT_PERCEP)
                     *w = MAX_WEIGHT_PERCEP;
+                }
             } else {
                 (*w)--;
-                if (*w < MIN_WEIGHT_PERCEP)
+                if (CAP_PERCEP_WEIGHTS) {
+                  if(*w < MIN_WEIGHT_PERCEP)
                     *w = MIN_WEIGHT_PERCEP;
+                }
             }
             DEBUG(op->proc_id,
                   "index1:%d index2:%d hist:%s old_dot_product:%d correct_pred:%d *w[%d]: %d->%d\n",
