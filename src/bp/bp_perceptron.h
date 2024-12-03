@@ -12,12 +12,13 @@
 
 typedef struct Bp_Perceptron_Data_struct {
     Perceptron** grid;
-    // Perceptrons_Hash_Table* history_to_tables;
+    Hash_Table* history_to_tables;
     Hash_Table table;
     uns64 perceptron_global_hist;
 } Bp_Perceptron_Data;
 
 Perceptron* get_perceptron(Op*, Bp_Perceptron_Data*);
+Perceptron* lazy_access_create(Hash_Table*, int64);
 
 void perceptron_bp_init(void);
 uns8 perceptron_predict(Op*);

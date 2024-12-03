@@ -42,13 +42,19 @@ void perceptron_bp_init(void) {
         Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[c];
 
         bp_percep_data->perceptron_global_hist = 0;
-        bp_percep_data->grid = (Perceptron**)malloc(sizeof(Perceptron*) * GRID_DIM_1);
+        bp_percep_data->grid = (Perceptron**) malloc(sizeof(Perceptron*) * GRID_DIM_1);
+        bp_percep_data->history_to_tables = (Hash_Table*) malloc(sizeof(Hash_Table) * GRID_DIM_1);
         
         init_hash_table(&bp_percep_data->table, "Percep_hash_table",
                         PERCEP_TABLE_SIZE, sizeof(Perceptron));
 
         for(uns i = 0; i < GRID_DIM_1; i++) {
           bp_percep_data->grid[i] = (Perceptron*)malloc(sizeof(Perceptron) * GRID_DIM_2);
+          
+          char table_name[64];
+          snprintf(table_name, sizeof(table_name), "Hist_percep_hash_table_%d", i);
+          init_hash_table(&bp_percep_data->history_to_tables[i], table_name,
+                          PERCEP_TABLE_SIZE, sizeof(Perceptron));
 
           for(uns j = 0; j < GRID_DIM_2; j++) {
             // number of weights defined plus bias
@@ -67,27 +73,51 @@ void perceptron_bp_init(void) {
 #define PERCEPTRON_DIM_IDX(addr, dim_entries) ((addr) & N_BIT_MASK(LOG2(dim_entries)))
 #define TRUNCATE_TO_INT64(u) ((int64)((u) & 0x7FFFFFFFFFFFFFFF))
 
-Perceptron* get_perceptron(Op* op, Bp_Perceptron_Data* bp_percep_data) {
-    Addr  branch_addr = op->oracle_info.pred_addr;
-    uns64 hist        = bp_percep_data->perceptron_global_hist;
-    uns32 index1      = PERCEPTRON_DIM_IDX(hist, GRID_DIM_1);
-    uns32 index2      = PERCEPTRON_DIM_IDX(branch_addr, GRID_DIM_2);
-    Perceptron* p;
-    // change the impl based on USE_ALT_IDX
-    if (USE_ALT_IDX) {
-        Flag new_entry;
-        // TODO: try without truncate macro
-        p = (Perceptron*) hash_table_access_create(
-            &bp_percep_data->table, TRUNCATE_TO_INT64(branch_addr), &new_entry);
-        if (new_entry) {
-            p->weights = (int32*) malloc(sizeof(int32) * (PERCEP_HIST_LEN+1));
-            for (uns k = 0; k < PERCEP_HIST_LEN+1; k++) {
-                p->weights[k] = PERCEP_WEIGHT_INIT_VAL;
-            }
-        }
-    } else {
-        p = &(bp_percep_data->grid[index1][index2]);
+Perceptron* lazy_access_create(Hash_Table* table, int64 key) {
+  Flag new_entry;
+  Perceptron* p = (Perceptron*)hash_table_access_create(table, key, &new_entry);
+  if(new_entry) {
+    p->weights = (int32*)malloc(sizeof(int32) * (PERCEP_HIST_LEN + 1));
+    for(uns k = 0; k < PERCEP_HIST_LEN + 1; k++) {
+      p->weights[k] = PERCEP_WEIGHT_INIT_VAL;
     }
+  }
+  return p;
+}
+
+Perceptron* get_perceptron(Op* op, Bp_Perceptron_Data* bp_percep_data) {
+    // Addr  branch_addr = op->oracle_info.pred_addr;
+    Addr  branch_addr = (op->oracle_info.pred_addr >> 2) & (PERCEP_TABLE_SIZE-1);
+    uns64 hist        = bp_percep_data->perceptron_global_hist;
+    uns32 index1, index2;
+    Perceptron* p;
+
+    switch (BP_PERCEP_MODEL) {
+      case 3:
+        // hist ^ branchPC =(hash)> perceptron
+        hist &= (PERCEP_TABLE_SIZE-1);
+        p = lazy_access_create(&bp_percep_data->table, hist ^ branch_addr);
+        break;
+      case 2:
+        // hist =(mod)> branchPC =(hash)> perceptron
+        index1 = PERCEPTRON_DIM_IDX(hist, GRID_DIM_1);
+        Hash_Table* percep_table = &bp_percep_data->history_to_tables[index1];
+        p = lazy_access_create(percep_table, branch_addr);
+        break;
+      case 1:
+        // branchPC =(hash)> perceptron
+        // TODO: revert to truncate macro if results are worse
+        p = lazy_access_create(&bp_percep_data->table, branch_addr);
+        break;
+      case 0:
+      default:
+        // hist =(mod)> branchPC =(mod)> perceptron
+        index1 = PERCEPTRON_DIM_IDX(hist, GRID_DIM_1);
+        index2 = PERCEPTRON_DIM_IDX(branch_addr, GRID_DIM_2);
+        p = &(bp_percep_data->grid[index1][index2]);
+        break;
+    }
+
     return p;
 }
 
@@ -149,6 +179,7 @@ void perceptron_update(Op* op) {
     Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[PROC_IDX(op->proc_id)];
     uns64 hist = bp_percep_data->perceptron_global_hist;
     Perceptron* p = get_perceptron(op, bp_percep_data);
+    
     int32* w = &(p->weights[0]);
 
     // don't train if the branch was correctly predicted and the output
