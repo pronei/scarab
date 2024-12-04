@@ -106,6 +106,7 @@ typedef struct Per_Branch_Stat_struct {
 
 typedef struct Recovery_Info_struct {  // QUESTION no proc_id?
   uns   proc_id;
+  uns64 percep_global_hist;
   uns32 pred_global_hist;  // the global history used for the prediction
   uns64 conf_perceptron_global_hist;  // Only for confidnece perceptron, a copy
                                       // of the correct global history

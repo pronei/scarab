@@ -5,11 +5,6 @@
 #include "libs/hash_lib.h"
 #include "globals/global_types.h"
 
-// TODO: required for hist[N:] -> branchPC -> perceptron (or) hist[N:] -> hist xor branchPC -> perceptron approaches
-// typedef struct Perceptrons_Hash_Table_struct {
-//     Hash_Table table;
-// } Perceptrons_Hash_Table;
-
 typedef struct Bp_Perceptron_Data_struct {
     Perceptron** grid;
     Hash_Table* history_to_tables;

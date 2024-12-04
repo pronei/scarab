@@ -127,6 +127,7 @@ struct Br_Conf_struct;
 
 typedef struct Perceptron_struct {
   int32* weights;
+  float* flt_weights;
 } Perceptron;
 
 typedef struct Bp_Data_struct {
