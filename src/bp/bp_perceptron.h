@@ -1,9 +1,19 @@
 #ifndef __BP_PERCEP_H__
 #define __BP_PERCEP_H__
 
+#include "debug/debug_macros.h"
 #include "bp/bp.h"
+#include "bp/bp.param.h"
 #include "libs/hash_lib.h"
 #include "globals/global_types.h"
+
+#define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_BP, ##args)
+
+#define PERCEP_WEIGHT_INIT_VAL 0
+
+#define PERCEPTRON_THRESH (int32) (1.93 * (PERCEP_HIST_LEN) + 14)
+#define MAX_WEIGHT_PERCEP ((1 << (LOG2(PERCEPTRON_THRESH)+1)) - 1)
+#define MIN_WEIGHT_PERCEP (-(MAX_WEIGHT_PERCEP + 1))
 
 typedef struct Bp_Perceptron_Data_struct {
     Perceptron** grid;

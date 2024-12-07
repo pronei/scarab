@@ -1,4 +1,3 @@
-#include "debug/debug_macros.h"
 #include "globals/global_defs.h"
 #include "globals/global_types.h"
 #include "globals/utils.h"
@@ -9,14 +8,6 @@
 #include "bp/bp_perceptron.h"
 
 #include "statistics.h"
-
-// Jimenez & Lin paper values
-#define PERCEP_HIST_LEN 59
-#define PERCEP_TABLE_SIZE (1 << 10)
-
-#define PERCEP_WEIGHT_INIT_VAL 0
-
-#define DEBUG(proc_id, args...) _DEBUG(proc_id, DEBUG_BP, ##args)
 
 static Bp_Perceptron_Data** bp_percep_data_all_cores = NULL;
 
@@ -33,15 +24,12 @@ void perceptron_bp_init(void) {
         Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[c];
 
         bp_percep_data->perceptron_global_hist = 0;
-        bp_percep_data->grid = (Perceptron**) malloc(sizeof(Perceptron*) * PERCEP_GRID_DIM_1);
         bp_percep_data->history_to_tables = (Hash_Table*) malloc(sizeof(Hash_Table) * PERCEP_GRID_DIM_1);
         
         init_hash_table(&bp_percep_data->table, "Percep_hash_table",
                         PERCEP_TABLE_SIZE, sizeof(Perceptron));
 
         for(uns i = 0; i < PERCEP_GRID_DIM_1; i++) {
-          bp_percep_data->grid[i] = (Perceptron*)malloc(sizeof(Perceptron) * PERCEP_TABLE_SIZE);
-          
           char table_name[64];
           snprintf(table_name, sizeof(table_name), "Hist_percep_hash_table_%d", i);
           init_hash_table(&bp_percep_data->history_to_tables[i], table_name,
@@ -62,7 +50,6 @@ Perceptron* lazy_access_create(Hash_Table* table, int64 key) {
     p->weights = (int32*)malloc(sizeof(int32) * (PERCEP_HIST_LEN + 1));
     for(uns k = 0; k < PERCEP_HIST_LEN + 1; k++) {
       p->weights[k] = PERCEP_WEIGHT_INIT_VAL;
-      p->flt_weights[k] = (float) PERCEP_WEIGHT_INIT_VAL;
     }
   }
   return p;
@@ -72,6 +59,7 @@ Perceptron* get_perceptron(Op* op, Bp_Perceptron_Data* bp_percep_data) {
     Addr  branch_addr = op->oracle_info.pred_addr;
     uns64 hist        = bp_percep_data->perceptron_global_hist;
     Perceptron* p;
+    Hash_Table* percep_table;
 
     switch (BP_PERCEP_MODEL) {
       case 1:
@@ -81,13 +69,12 @@ Perceptron* get_perceptron(Op* op, Bp_Perceptron_Data* bp_percep_data) {
         break;
       case 2:
         // hist =(mod)> branchPC =(hash)> perceptron
-        index1 = PERCEPTRON_DIM_IDX(hist, PERCEP_GRID_DIM_1);
-        Hash_Table* percep_table = &bp_percep_data->history_to_tables[index1];
+        percep_table = &bp_percep_data
+             ->history_to_tables[PERCEPTRON_DIM_IDX(hist, PERCEP_GRID_DIM_1)];
         p = lazy_access_create(percep_table, branch_addr);
         break;
       case 3:
         // hist ^ branchPC =(hash)> perceptron
-        hist &= (PERCEP_TABLE_SIZE-1);
         p = lazy_access_create(&bp_percep_data->table, hist ^ branch_addr);
         break;
     }
@@ -98,7 +85,6 @@ Perceptron* get_perceptron(Op* op, Bp_Perceptron_Data* bp_percep_data) {
 uns8 perceptron_predict(Op* op) {
     uns8  output;
     int32 dot_product = 0;
-    Addr  branch_addr = op->oracle_info.pred_addr;
     Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[PROC_IDX(op->proc_id)];
     uns64 hist        = bp_percep_data->perceptron_global_hist;
     
@@ -116,36 +102,28 @@ uns8 perceptron_predict(Op* op) {
             dot_product -= *w;
     }
 
-    output = dot_product > 0 ? 1 : 0;
+    output = dot_product >= 0 ? 1 : 0;
 
     DEBUG(op->proc_id,
            "hist:%s dot_product:%d output:%d \n", hexstr64(hist), dot_product, output);
 
     // need to add to state so we can access this during training
     op->perceptron_dot_output = dot_product;
-    op->recovery_info.percep_global_hist = hist;
 
     return output;
 }
-
-#define PERCEPTRON_THRESH (int32) (1.93 * (PERCEP_HIST_LEN) + 14)
-#define MAX_WEIGHT_PERCEP ((1 << (10 - 1)) - 1)
-#define MIN_WEIGHT_PERCEP (-(MAX_WEIGHT_PERCEP + 1))
 
 void perceptron_update(Op* op) {
     if (op->table_info->cf_type != CF_CBR) {
         return;
     }
 
-    Addr  branch_addr = op->oracle_info.pred_addr;
     int32 dot_product  = op->perceptron_dot_output;
     Flag  y            = dot_product >= 0 ? 1 : 0;
     Flag  t            = op->oracle_info.dir;
-    uns8  correct_pred = op->oracle_info.mispred ? 0 : 1;
 
     Bp_Perceptron_Data* bp_percep_data = bp_percep_data_all_cores[PROC_IDX(op->proc_id)];
-    // uns64 hist = bp_percep_data->perceptron_global_hist;
-    uns64 hist = op->recovery_info.percep_global_hist;
+    uns64 hist = bp_percep_data->perceptron_global_hist;
     Perceptron* p = get_perceptron(op, bp_percep_data);
     
     int32* w = &(p->weights[0]);
@@ -156,7 +134,7 @@ void perceptron_update(Op* op) {
 
     if (do_train) {
         // update bias based upon whether branch was mispredicted or not
-        if (!op->oracle_info.mispred)
+        if (t)
             (*w)++;
         else
             (*w)--;
@@ -171,9 +149,8 @@ void perceptron_update(Op* op) {
         for (uns i = 0; i < PERCEP_HIST_LEN; i++, w++) {
             int32 old_w = *w;
             UNUSED(old_w);
-            uns8 match = (hist & (1ULL << i)) > 0;
-            if (match == op->oracle_info.dir) {
-                // TODO: try exponential decay (translates to << in hardware)
+            Flag match = (hist & (1ULL << i)) > 0;
+            if (match == t) {
                 (*w)++;
                 if (CAP_PERCEP_WEIGHTS) {
                   if(*w > MAX_WEIGHT_PERCEP)
@@ -188,7 +165,7 @@ void perceptron_update(Op* op) {
             }
             DEBUG(op->proc_id,
                   "hist:%s old_dot_product:%d correct_pred:%d *w[%d]: %d->%d\n",
-                  hexstr64(hist), dot_product, correct_pred, i, old_w, *w);
+                  hexstr64(hist), dot_product, y==t, i, old_w, *w);
         }
 
         
